@@ -4,8 +4,9 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useAuth } from "@/contexts/auth-context"
 import Post from "@/components/post"
-import { Search, Filter } from "lucide-react"
+import { Search, Filter, Lock } from "lucide-react"
 
 // Mock data for demonstration
 const mockPosts = [
@@ -72,6 +73,7 @@ export default function HomePage() {
   const [posts, setPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const { user, userProfile } = useAuth()
 
   useEffect(() => {
     // Simulate loading posts
@@ -89,11 +91,26 @@ export default function HomePage() {
       post.author.name.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
+  if (!user) {
+    return (
+      <div className="max-w-4xl mx-auto text-center py-12">
+        <Lock className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+        <h1 className="text-3xl font-bold mb-4">Welcome to SocialApp</h1>
+        <p className="text-muted-foreground mb-6">Please login to access the social media platform</p>
+        <p className="text-sm text-muted-foreground">
+          Demo accounts: admin@socialapp.com / admin123 or user@socialapp.com / user123
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-4xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-4">Welcome to Social Media App</h1>
+        <h1 className="text-3xl font-bold mb-4">
+          Welcome back, {userProfile?.displayName}!{userProfile?.role === "admin" && " 👑"}
+        </h1>
         <p className="text-muted-foreground mb-6">Discover amazing content from people around the world</p>
 
         {/* Search and Filter */}
