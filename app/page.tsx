@@ -6,68 +6,10 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/auth-context"
 import Post from "@/components/post"
-import { Search, Filter, Lock } from "lucide-react"
-
-// Mock data for demonstration
-const mockPosts = [
-  {
-    id: "1",
-    author: {
-      name: "John Doe",
-      username: "johndoe",
-      avatar: "/placeholder.svg?height=40&width=40",
-    },
-    content: {
-      text: "Just finished building an amazing social media app! The features include real-time posting, image uploads, and dark mode support. What do you think? 🚀",
-      images: ["/placeholder.svg?height=300&width=400"],
-    },
-    type: "image" as const,
-    timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-    likes: 42,
-    comments: 8,
-    shares: 3,
-    isLiked: false,
-    isBookmarked: false,
-  },
-  {
-    id: "2",
-    author: {
-      name: "Jane Smith",
-      username: "janesmith",
-      avatar: "/placeholder.svg?height=40&width=40",
-    },
-    content: {
-      text: "Beautiful sunset today! Nature never fails to amaze me. 🌅",
-      images: ["/placeholder.svg?height=300&width=500", "/placeholder.svg?height=300&width=500"],
-    },
-    type: "image" as const,
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-    likes: 128,
-    comments: 15,
-    shares: 7,
-    isLiked: true,
-    isBookmarked: true,
-  },
-  {
-    id: "3",
-    author: {
-      name: "Tech Guru",
-      username: "techguru",
-      avatar: "/placeholder.svg?height=40&width=40",
-    },
-    content: {
-      text: "Here's a quick tutorial on React hooks! This video covers useState, useEffect, and custom hooks. Perfect for beginners! 📚",
-      video: "/placeholder.mp4",
-    },
-    type: "video" as const,
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5), // 5 hours ago
-    likes: 89,
-    comments: 23,
-    shares: 12,
-    isLiked: false,
-    isBookmarked: false,
-  },
-]
+import { Search, Filter, Lock, Plus } from "lucide-react"
+import { collection, query, orderBy, onSnapshot, limit } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import Link from "next/link"
 
 export default function HomePage() {
   const [posts, setPosts] = useState<any[]>([])
@@ -76,19 +18,42 @@ export default function HomePage() {
   const { user, userProfile } = useAuth()
 
   useEffect(() => {
-    // Simulate loading posts
-    const timer = setTimeout(() => {
-      setPosts(mockPosts)
+    if (!user) {
       setLoading(false)
-    }, 1500)
+      return
+    }
 
-    return () => clearTimeout(timer)
-  }, [])
+    // Listen to posts from Firebase Firestore
+    const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(20))
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const newPosts: any[] = []
+        snapshot.forEach((doc) => {
+          const data = doc.data()
+          newPosts.push({
+            id: doc.id,
+            ...data,
+            timestamp: data.createdAt?.toDate() || new Date(),
+          })
+        })
+        setPosts(newPosts)
+        setLoading(false)
+      },
+      (error) => {
+        console.error("Error fetching posts:", error)
+        setLoading(false)
+      },
+    )
+
+    return () => unsubscribe()
+  }, [user])
 
   const filteredPosts = posts.filter(
     (post) =>
-      post.content.text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.author.name.toLowerCase().includes(searchQuery.toLowerCase()),
+      post.content?.text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      post.author?.name?.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
   if (!user) {
@@ -128,6 +93,12 @@ export default function HomePage() {
             <Filter className="h-4 w-4" />
             <span>Filter</span>
           </Button>
+          <Button asChild>
+            <Link href="/upload" className="flex items-center space-x-2">
+              <Plus className="h-4 w-4" />
+              <span>Create Post</span>
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -160,7 +131,18 @@ export default function HomePage() {
           filteredPosts.map((post) => <Post key={post.id} post={post} />)
         ) : (
           <div className="text-center py-12">
-            <p className="text-muted-foreground">No posts found matching your search.</p>
+            <div className="mb-4">
+              <p className="text-muted-foreground mb-4">
+                {searchQuery
+                  ? "No posts found matching your search."
+                  : "No posts yet. Be the first to share something!"}
+              </p>
+              {!searchQuery && (
+                <Button asChild>
+                  <Link href="/upload">Create Your First Post</Link>
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </div>

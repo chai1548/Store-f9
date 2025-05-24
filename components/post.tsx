@@ -8,10 +8,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
+import { doc, updateDoc, increment } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { useAuth } from "@/contexts/auth-context"
 
 interface Post {
   id: string
   author: {
+    uid: string
     name: string
     username: string
     avatar?: string
@@ -28,6 +32,11 @@ interface Post {
   shares: number
   isLiked?: boolean
   isBookmarked?: boolean
+  settings?: {
+    allowComments: boolean
+    allowSharing: boolean
+    allowDownload: boolean
+  }
 }
 
 interface PostProps {
@@ -37,15 +46,46 @@ interface PostProps {
 export default function Post({ post }: PostProps) {
   const [isLiked, setIsLiked] = useState(post.isLiked || false)
   const [isBookmarked, setIsBookmarked] = useState(post.isBookmarked || false)
-  const [likes, setLikes] = useState(post.likes)
+  const [likes, setLikes] = useState(post.likes || 0)
+  const { userProfile } = useAuth()
 
-  const handleLike = () => {
-    setIsLiked(!isLiked)
-    setLikes(isLiked ? likes - 1 : likes + 1)
+  const handleLike = async () => {
+    if (!userProfile) return
+
+    try {
+      const newLikedState = !isLiked
+      setIsLiked(newLikedState)
+      setLikes(newLikedState ? likes + 1 : likes - 1)
+
+      // Update likes in Firebase
+      const postRef = doc(db, "posts", post.id)
+      await updateDoc(postRef, {
+        likes: increment(newLikedState ? 1 : -1),
+      })
+    } catch (error) {
+      console.error("Error updating like:", error)
+      // Revert on error
+      setIsLiked(!isLiked)
+      setLikes(isLiked ? likes + 1 : likes - 1)
+    }
   }
 
   const handleBookmark = () => {
     setIsBookmarked(!isBookmarked)
+    // TODO: Implement bookmark functionality in Firebase
+  }
+
+  const handleShare = async () => {
+    if (!post.settings?.allowSharing) return
+
+    try {
+      const postRef = doc(db, "posts", post.id)
+      await updateDoc(postRef, {
+        shares: increment(1),
+      })
+    } catch (error) {
+      console.error("Error updating shares:", error)
+    }
   }
 
   return (
@@ -54,7 +94,7 @@ export default function Post({ post }: PostProps) {
         <div className="flex items-center space-x-3 flex-1">
           <Avatar>
             <AvatarImage src={post.author.avatar || "/placeholder.svg"} />
-            <AvatarFallback>{post.author.name.charAt(0)}</AvatarFallback>
+            <AvatarFallback>{post.author.name?.charAt(0) || "U"}</AvatarFallback>
           </Avatar>
           <div>
             <p className="font-semibold">{post.author.name}</p>
@@ -106,14 +146,18 @@ export default function Post({ post }: PostProps) {
             <Heart className={`h-4 w-4 mr-1 ${isLiked ? "fill-current" : ""}`} />
             {likes}
           </Button>
-          <Button variant="ghost" size="sm">
-            <MessageCircle className="h-4 w-4 mr-1" />
-            {post.comments}
-          </Button>
-          <Button variant="ghost" size="sm">
-            <Share2 className="h-4 w-4 mr-1" />
-            {post.shares}
-          </Button>
+          {post.settings?.allowComments !== false && (
+            <Button variant="ghost" size="sm">
+              <MessageCircle className="h-4 w-4 mr-1" />
+              {post.comments || 0}
+            </Button>
+          )}
+          {post.settings?.allowSharing !== false && (
+            <Button variant="ghost" size="sm" onClick={handleShare}>
+              <Share2 className="h-4 w-4 mr-1" />
+              {post.shares || 0}
+            </Button>
+          )}
         </div>
         <Button variant="ghost" size="sm" onClick={handleBookmark} className={isBookmarked ? "text-blue-500" : ""}>
           <Bookmark className={`h-4 w-4 ${isBookmarked ? "fill-current" : ""}`} />

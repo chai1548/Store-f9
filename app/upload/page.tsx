@@ -12,7 +12,12 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context"
 import { Upload, ImageIcon, Video, Type, X } from "lucide-react"
+import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
+import { db, storage } from "@/lib/firebase"
+import { useRouter } from "next/navigation"
 
 export default function UploadPage() {
   const [activeTab, setActiveTab] = useState("text")
@@ -27,6 +32,8 @@ export default function UploadPage() {
     isPublic: true,
   })
   const { toast } = useToast()
+  const { userProfile } = useAuth()
+  const router = useRouter()
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
@@ -35,6 +42,15 @@ export default function UploadPage() {
 
   const removeFile = (index: number) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const uploadFilesToStorage = async (files: File[]): Promise<string[]> => {
+    const uploadPromises = files.map(async (file) => {
+      const fileRef = ref(storage, `posts/${Date.now()}_${file.name}`)
+      await uploadBytes(fileRef, file)
+      return getDownloadURL(fileRef)
+    })
+    return Promise.all(uploadPromises)
   }
 
   const handleUpload = async () => {
@@ -47,28 +63,88 @@ export default function UploadPage() {
       return
     }
 
+    if (!userProfile) {
+      toast({
+        title: "Error",
+        description: "Please login to create a post.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setUploading(true)
     setUploadProgress(0)
 
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          setUploading(false)
-          toast({
-            title: "Success!",
-            description: "Your post has been uploaded successfully.",
-          })
-          // Reset form
-          setContent("")
-          setSelectedFiles([])
-          setUploadProgress(0)
-          return 100
-        }
-        return prev + 10
+    try {
+      // Upload files to Firebase Storage
+      let fileUrls: string[] = []
+      if (selectedFiles.length > 0) {
+        setUploadProgress(30)
+        fileUrls = await uploadFilesToStorage(selectedFiles)
+        setUploadProgress(60)
+      }
+
+      // Prepare post data
+      const postData = {
+        author: {
+          uid: userProfile.uid,
+          name: userProfile.displayName,
+          username: userProfile.email.split("@")[0],
+          avatar: userProfile.avatar || null,
+        },
+        content: {
+          text: content.trim() || null,
+          images: activeTab === "image" ? fileUrls : [],
+          video: activeTab === "video" && fileUrls.length > 0 ? fileUrls[0] : null,
+        },
+        type: activeTab,
+        createdAt: serverTimestamp(),
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        settings: settings,
+        isPublic: settings.isPublic,
+      }
+
+      setUploadProgress(80)
+
+      // Save post to Firestore
+      await addDoc(collection(db, "posts"), postData)
+
+      setUploadProgress(100)
+
+      toast({
+        title: "Success!",
+        description: "Your post has been uploaded successfully.",
       })
-    }, 200)
+
+      // Reset form
+      setContent("")
+      setSelectedFiles([])
+      setUploadProgress(0)
+      setUploading(false)
+
+      // Redirect to home page
+      router.push("/")
+    } catch (error: any) {
+      console.error("Error uploading post:", error)
+      toast({
+        title: "Error",
+        description: "Failed to upload post. Please try again.",
+        variant: "destructive",
+      })
+      setUploading(false)
+      setUploadProgress(0)
+    }
+  }
+
+  if (!userProfile) {
+    return (
+      <div className="max-w-4xl mx-auto text-center py-12">
+        <h1 className="text-3xl font-bold mb-4">Please Login</h1>
+        <p className="text-muted-foreground">You need to be logged in to create posts.</p>
+      </div>
+    )
   }
 
   return (
@@ -150,8 +226,16 @@ export default function UploadPage() {
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                       {selectedFiles.map((file, index) => (
                         <div key={index} className="relative">
-                          <div className="aspect-square bg-muted rounded-lg flex items-center justify-center">
-                            <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                          <div className="aspect-square bg-muted rounded-lg flex items-center justify-center overflow-hidden">
+                            {file.type.startsWith("image/") ? (
+                              <img
+                                src={URL.createObjectURL(file) || "/placeholder.svg"}
+                                alt={file.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                            )}
                           </div>
                           <Badge variant="secondary" className="absolute top-2 left-2">
                             {file.name.split(".").pop()?.toUpperCase()}
@@ -206,6 +290,9 @@ export default function UploadPage() {
                           <div className="flex items-center space-x-3">
                             <Video className="h-5 w-5" />
                             <span className="text-sm font-medium">{file.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                            </span>
                           </div>
                           <Button variant="ghost" size="sm" onClick={() => removeFile(index)}>
                             <X className="h-4 w-4" />
@@ -283,10 +370,12 @@ export default function UploadPage() {
             <CardContent>
               <div className="space-y-3">
                 <div className="flex items-center space-x-3">
-                  <div className="h-8 w-8 bg-muted rounded-full"></div>
+                  <div className="h-8 w-8 bg-muted rounded-full flex items-center justify-center">
+                    {userProfile.displayName.charAt(0)}
+                  </div>
                   <div>
-                    <p className="text-sm font-medium">Your Name</p>
-                    <p className="text-xs text-muted-foreground">@username</p>
+                    <p className="text-sm font-medium">{userProfile.displayName}</p>
+                    <p className="text-xs text-muted-foreground">@{userProfile.email.split("@")[0]}</p>
                   </div>
                 </div>
                 {content && (
