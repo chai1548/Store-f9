@@ -12,6 +12,7 @@ import { Home, Upload, Search, User, Bell, MessageCircle, LogOut, Settings, Menu
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import NotificationBell from "@/components/notification-bell"
 
 export default function Navigation() {
   const pathname = usePathname()
@@ -75,7 +76,8 @@ export default function Navigation() {
             <div className="flex items-center space-x-2">
               {user ? (
                 <>
-                  {/* Chat button */}
+                  {/* Chat and Notifications */}
+                  <NotificationBell />
                   <Button
                     variant="ghost"
                     size="sm"
@@ -84,10 +86,6 @@ export default function Navigation() {
                   >
                     <MessageCircle className="h-4 w-4" />
                     <span className="hidden lg:inline ml-2">Chat</span>
-                    {/* Add notification badge */}
-                    <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      3
-                    </div>
                   </Button>
 
                   {/* User profile - Desktop */}
@@ -173,7 +171,7 @@ export default function Navigation() {
           {/* Mobile Navigation - Bottom tabs style */}
           {user && (
             <div className="md:hidden flex justify-around py-2 border-t bg-background">
-              {navItems.slice(0, 5).map((item) => {
+              {navItems.slice(0, 4).map((item) => {
                 const Icon = item.icon
                 const isActive = pathname === item.href
                 return (
@@ -191,18 +189,18 @@ export default function Navigation() {
                   </Button>
                 )
               })}
+              <div className="flex flex-col items-center space-y-1 h-auto py-2 px-3">
+                <NotificationBell />
+                <span className="text-xs">Alerts</span>
+              </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowChat(true)}
-                className="flex flex-col items-center space-y-1 h-auto py-2 px-3 relative"
+                className="flex flex-col items-center space-y-1 h-auto py-2 px-3"
               >
                 <MessageCircle className="h-4 w-4" />
                 <span className="text-xs">Chat</span>
-                {/* Add notification badge */}
-                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                  3
-                </div>
               </Button>
             </div>
           )}
