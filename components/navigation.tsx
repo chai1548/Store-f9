@@ -76,9 +76,18 @@ export default function Navigation() {
               {user ? (
                 <>
                   {/* Chat button */}
-                  <Button variant="ghost" size="sm" onClick={() => setShowChat(true)} className="hidden sm:flex">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowChat(true)}
+                    className="hidden sm:flex relative"
+                  >
                     <MessageCircle className="h-4 w-4" />
                     <span className="hidden lg:inline ml-2">Chat</span>
+                    {/* Add notification badge */}
+                    <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      3
+                    </div>
                   </Button>
 
                   {/* User profile - Desktop */}
@@ -186,10 +195,14 @@ export default function Navigation() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowChat(true)}
-                className="flex flex-col items-center space-y-1 h-auto py-2 px-3"
+                className="flex flex-col items-center space-y-1 h-auto py-2 px-3 relative"
               >
                 <MessageCircle className="h-4 w-4" />
                 <span className="text-xs">Chat</span>
+                {/* Add notification badge */}
+                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                  3
+                </div>
               </Button>
             </div>
           )}
