@@ -61,7 +61,13 @@ interface User {
   lastSeen?: Date
 }
 
-export default function MessageSystem() {
+interface MessageSystemProps {
+  initialUserId?: string
+  initialUserName?: string
+  initialUserAvatar?: string
+}
+
+export default function MessageSystem({ initialUserId, initialUserName, initialUserAvatar }: MessageSystemProps = {}) {
   const { userProfile } = useAuth()
   const { toast } = useToast()
   const [chats, setChats] = useState<Chat[]>([])
@@ -147,6 +153,32 @@ export default function MessageSystem() {
     setChats(sampleChats)
     setUsers(sampleUsers)
   }, [userProfile])
+
+  useEffect(() => {
+    if (initialUserId && initialUserName) {
+      // Create or find chat with the initial user
+      const existingChat = chats.find((chat) => chat.id === initialUserId)
+
+      if (existingChat) {
+        setSelectedChat(existingChat)
+      } else {
+        // Create new chat
+        const newChat: Chat = {
+          id: initialUserId,
+          name: initialUserName,
+          avatar: initialUserAvatar,
+          lastMessage: "",
+          lastMessageTime: new Date(),
+          unreadCount: 0,
+          isOnline: true,
+          isGroup: false,
+        }
+
+        setChats((prev) => [newChat, ...prev])
+        setSelectedChat(newChat)
+      }
+    }
+  }, [initialUserId, initialUserName, initialUserAvatar, chats])
 
   useEffect(() => {
     if (selectedChat) {
