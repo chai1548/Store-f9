@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Send, Eye, ExternalLink } from "lucide-react"
+import { Send, ExternalLink } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import {
   doc,
@@ -21,9 +21,12 @@ import {
   orderBy,
   onSnapshot,
   serverTimestamp,
+  deleteDoc,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
+import { useToast } from "@/hooks/use-toast"
+import PostActions from "@/components/post-actions"
 
 interface Comment {
   id: string
@@ -65,9 +68,10 @@ interface Post {
 
 interface PostProps {
   post: Post
+  compact?: boolean
 }
 
-export default function Post({ post }: PostProps) {
+export default function Post({ post, compact = false }: PostProps) {
   const [isLiked, setIsLiked] = useState(post.isLiked || false)
   const [isBookmarked, setIsBookmarked] = useState(post.isBookmarked || false)
   const [likes, setLikes] = useState(post.likes || 0)
@@ -76,6 +80,7 @@ export default function Post({ post }: PostProps) {
   const [newComment, setNewComment] = useState("")
   const [commentsLoading, setCommentsLoading] = useState(false)
   const { userProfile } = useAuth()
+  const { toast } = useToast()
 
   useEffect(() => {
     if (showComments) {
@@ -144,6 +149,10 @@ export default function Post({ post }: PostProps) {
 
   const handleBookmark = () => {
     setIsBookmarked(!isBookmarked)
+    toast({
+      title: isBookmarked ? "Removed from bookmarks" : "Added to bookmarks",
+      description: isBookmarked ? "Post removed from your bookmarks" : "Post saved to your bookmarks",
+    })
   }
 
   const handleShare = async () => {
@@ -154,8 +163,33 @@ export default function Post({ post }: PostProps) {
       await updateDoc(postRef, {
         shares: increment(1),
       })
+
+      const url = `${window.location.origin}/post/${post.id}`
+      await navigator.clipboard.writeText(url)
+
+      toast({
+        title: "Link copied!",
+        description: "Post link has been copied to your clipboard.",
+      })
     } catch (error) {
-      console.error("Error updating shares:", error)
+      console.error("Error sharing post:", error)
+    }
+  }
+
+  const handleDelete = async () => {
+    try {
+      await deleteDoc(doc(db, "posts", post.id))
+      toast({
+        title: "Post deleted",
+        description: "Your post has been deleted successfully.",
+      })
+    } catch (error) {
+      console.error("Error deleting post:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete post.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -167,7 +201,7 @@ export default function Post({ post }: PostProps) {
 
     if (imageCount === 1) {
       return (
-        <div className="relative w-full h-96 rounded-lg overflow-hidden mb-4">
+        <div className={`relative w-full ${compact ? "h-48" : "h-96"} rounded-lg overflow-hidden mb-4`}>
           <Image src={images[0] || "/placeholder.svg"} alt="Post image" fill className="object-cover" />
         </div>
       )
@@ -177,7 +211,10 @@ export default function Post({ post }: PostProps) {
       return (
         <div className="grid grid-cols-2 gap-2 mb-4">
           {images.map((image, index) => (
-            <div key={index} className="relative aspect-square rounded-lg overflow-hidden">
+            <div
+              key={index}
+              className={`relative ${compact ? "aspect-video" : "aspect-square"} rounded-lg overflow-hidden`}
+            >
               <Image src={image || "/placeholder.svg"} alt={`Post image ${index + 1}`} fill className="object-cover" />
             </div>
           ))}
@@ -188,12 +225,15 @@ export default function Post({ post }: PostProps) {
     if (imageCount === 3) {
       return (
         <div className="grid grid-cols-2 gap-2 mb-4">
-          <div className="relative aspect-square rounded-lg overflow-hidden">
+          <div className={`relative ${compact ? "aspect-video" : "aspect-square"} rounded-lg overflow-hidden`}>
             <Image src={images[0] || "/placeholder.svg"} alt="Post image 1" fill className="object-cover" />
           </div>
           <div className="grid grid-rows-2 gap-2">
             {images.slice(1, 3).map((image, index) => (
-              <div key={index + 1} className="relative aspect-square rounded-lg overflow-hidden">
+              <div
+                key={index + 1}
+                className={`relative ${compact ? "aspect-video" : "aspect-square"} rounded-lg overflow-hidden`}
+              >
                 <Image
                   src={image || "/placeholder.svg"}
                   alt={`Post image ${index + 2}`}
@@ -211,11 +251,14 @@ export default function Post({ post }: PostProps) {
     return (
       <div className="grid grid-cols-2 gap-2 mb-4">
         {images.slice(0, 3).map((image, index) => (
-          <div key={index} className="relative aspect-square rounded-lg overflow-hidden">
+          <div
+            key={index}
+            className={`relative ${compact ? "aspect-video" : "aspect-square"} rounded-lg overflow-hidden`}
+          >
             <Image src={image || "/placeholder.svg"} alt={`Post image ${index + 1}`} fill className="object-cover" />
           </div>
         ))}
-        <div className="relative aspect-square rounded-lg overflow-hidden">
+        <div className={`relative ${compact ? "aspect-video" : "aspect-square"} rounded-lg overflow-hidden`}>
           <Image src={images[3] || "/placeholder.svg"} alt="Post image 4" fill className="object-cover" />
           {imageCount > 4 && (
             <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -228,35 +271,36 @@ export default function Post({ post }: PostProps) {
   }
 
   return (
-    <Card className="w-full max-w-2xl mx-auto mb-6">
-      <CardHeader className="flex flex-row items-center space-y-0 pb-3">
+    <Card className={`w-full ${compact ? "max-w-lg" : "max-w-2xl"} mx-auto mb-4 sm:mb-6`}>
+      <CardHeader className={`flex flex-row items-center space-y-0 ${compact ? "pb-2" : "pb-3"}`}>
         <div className="flex items-center space-x-3 flex-1">
-          <Avatar>
+          <Avatar className={compact ? "h-8 w-8" : "h-10 w-10"}>
             <AvatarImage src={post.author.avatar || "/placeholder.svg"} />
-            <AvatarFallback>{post.author.name?.charAt(0) || "U"}</AvatarFallback>
+            <AvatarFallback className={compact ? "text-xs" : "text-sm"}>
+              {post.author.name?.charAt(0) || "U"}
+            </AvatarFallback>
           </Avatar>
           <div>
-            <p className="font-semibold">{post.author.name}</p>
-            <p className="text-sm text-muted-foreground">@{post.author.username}</p>
+            <p className={`font-semibold ${compact ? "text-sm" : "text-base"}`}>{post.author.name}</p>
+            <p className={`text-muted-foreground ${compact ? "text-xs" : "text-sm"}`}>@{post.author.username}</p>
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <Badge variant="secondary">{post.type}</Badge>
-          <span className="text-sm text-muted-foreground">
+          <Badge variant="secondary" className={compact ? "text-xs px-2 py-0.5" : ""}>
+            {post.type}
+          </Badge>
+          <span className={`text-muted-foreground ${compact ? "text-xs" : "text-sm"} hidden sm:inline`}>
             {formatDistanceToNow(post.timestamp, { addSuffix: true })}
           </span>
-          <Button variant="ghost" size="sm">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
         </div>
       </CardHeader>
 
-      <CardContent className="pb-3">
+      <CardContent className={compact ? "pb-2" : "pb-3"}>
         {post.content.text && (
-          <p className="mb-4 text-sm leading-relaxed">
-            {post.content.text.length > 200 ? (
+          <p className={`mb-4 leading-relaxed ${compact ? "text-sm" : "text-base"}`}>
+            {post.content.text.length > (compact ? 100 : 200) ? (
               <>
-                {post.content.text.slice(0, 200)}...
+                {post.content.text.slice(0, compact ? 100 : 200)}...
                 <Link href={`/post/${post.id}`} className="text-primary hover:underline ml-1">
                   Read more
                 </Link>
@@ -280,9 +324,7 @@ export default function Post({ post }: PostProps) {
               <source src={post.content.video} type="video/mp4" />
               Your browser does not support the video tag.
             </video>
-            {/* Video overlay info */}
             <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs">Video</div>
-            {/* Play button overlay when not playing */}
             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
               <div className="bg-black/50 rounded-full p-3">
                 <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -297,54 +339,34 @@ export default function Post({ post }: PostProps) {
           </div>
         )}
 
-        {/* View Post Link */}
-        <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
-          <div className="flex items-center space-x-4">
-            {post.views && (
-              <div className="flex items-center space-x-1">
-                <Eye className="h-4 w-4" />
-                <span>{post.views} views</span>
-              </div>
-            )}
+        {/* View Post Link - Only show on mobile or compact view */}
+        {(compact || window.innerWidth < 640) && (
+          <div className="flex items-center justify-end text-sm text-muted-foreground mb-2">
+            <Button variant="ghost" size="sm" asChild>
+              <Link href={`/post/${post.id}`} className="flex items-center space-x-1">
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span>View</span>
+              </Link>
+            </Button>
           </div>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href={`/post/${post.id}`} className="flex items-center space-x-1">
-              <ExternalLink className="h-4 w-4" />
-              <span>View Post</span>
-            </Link>
-          </Button>
-        </div>
+        )}
       </CardContent>
 
       <CardFooter className="flex flex-col space-y-4 pt-3 border-t">
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="sm" onClick={handleLike} className={isLiked ? "text-red-500" : ""}>
-              <Heart className={`h-4 w-4 mr-1 ${isLiked ? "fill-current" : ""}`} />
-              {likes}
-            </Button>
-            {post.settings?.allowComments !== false && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowComments(!showComments)}
-                className={showComments ? "text-blue-500" : ""}
-              >
-                <MessageCircle className="h-4 w-4 mr-1" />
-                {post.comments || comments.length}
-              </Button>
-            )}
-            {post.settings?.allowSharing !== false && (
-              <Button variant="ghost" size="sm" onClick={handleShare}>
-                <Share2 className="h-4 w-4 mr-1" />
-                {post.shares || 0}
-              </Button>
-            )}
-          </div>
-          <Button variant="ghost" size="sm" onClick={handleBookmark} className={isBookmarked ? "text-blue-500" : ""}>
-            <Bookmark className={`h-4 w-4 ${isBookmarked ? "fill-current" : ""}`} />
-          </Button>
-        </div>
+        <PostActions
+          post={post}
+          isLiked={isLiked}
+          isBookmarked={isBookmarked}
+          likes={likes}
+          onLike={handleLike}
+          onBookmark={handleBookmark}
+          onShare={handleShare}
+          onDelete={handleDelete}
+          showComments={showComments}
+          onToggleComments={() => setShowComments(!showComments)}
+          commentsCount={comments.length}
+          compact={compact}
+        />
 
         {/* Quick Comments Preview */}
         {showComments && post.settings?.allowComments !== false && (
@@ -354,8 +376,10 @@ export default function Post({ post }: PostProps) {
             {/* Add Comment */}
             {userProfile && (
               <div className="flex space-x-2">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback>{userProfile.displayName.charAt(0)}</AvatarFallback>
+                <Avatar className={compact ? "h-6 w-6" : "h-8 w-8"}>
+                  <AvatarFallback className={compact ? "text-xs" : "text-sm"}>
+                    {userProfile.displayName.charAt(0)}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 flex space-x-2">
                   <Input
@@ -363,10 +387,10 @@ export default function Post({ post }: PostProps) {
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && handleAddComment()}
-                    className="flex-1"
+                    className={`flex-1 ${compact ? "h-8 text-sm" : ""}`}
                   />
-                  <Button size="sm" onClick={handleAddComment} disabled={!newComment.trim()}>
-                    <Send className="h-4 w-4" />
+                  <Button size={compact ? "sm" : "default"} onClick={handleAddComment} disabled={!newComment.trim()}>
+                    <Send className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
                   </Button>
                 </div>
               </div>
@@ -374,18 +398,18 @@ export default function Post({ post }: PostProps) {
 
             {/* Comments Preview (show only first 2) */}
             {commentsLoading ? (
-              <p className="text-sm text-muted-foreground">Loading comments...</p>
+              <p className={`text-muted-foreground ${compact ? "text-sm" : ""}`}>Loading comments...</p>
             ) : comments.length > 0 ? (
               <div className="space-y-3">
                 {comments.slice(0, 2).map((comment) => (
                   <div key={comment.id} className="flex space-x-2">
-                    <Avatar className="h-6 w-6">
+                    <Avatar className={compact ? "h-5 w-5" : "h-6 w-6"}>
                       <AvatarFallback className="text-xs">{comment.authorName.charAt(0)}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1">
                       <div className="bg-muted rounded-lg p-2">
                         <div className="flex items-center space-x-2 mb-1">
-                          <span className="text-xs font-medium">{comment.authorName}</span>
+                          <span className={`font-medium ${compact ? "text-xs" : "text-sm"}`}>{comment.authorName}</span>
                           <Badge
                             variant={comment.authorRole === "admin" ? "destructive" : "secondary"}
                             className="text-xs h-4"
@@ -393,7 +417,7 @@ export default function Post({ post }: PostProps) {
                             {comment.authorRole}
                           </Badge>
                         </div>
-                        <p className="text-sm">{comment.text}</p>
+                        <p className={compact ? "text-xs" : "text-sm"}>{comment.text}</p>
                       </div>
                     </div>
                   </div>
@@ -405,7 +429,9 @@ export default function Post({ post }: PostProps) {
                 )}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No comments yet. Be the first to comment!</p>
+              <p className={`text-muted-foreground ${compact ? "text-sm" : ""}`}>
+                No comments yet. Be the first to comment!
+              </p>
             )}
           </div>
         )}
