@@ -3,14 +3,25 @@
 import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Input, Textarea } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/contexts/auth-context"
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, getDocs } from "firebase/firestore"
+import {
+  collection,
+  addDoc,
+  query,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+  getDocs,
+  doc,
+  deleteDoc,
+} from "firebase/firestore"
 import { db } from "@/lib/firebase"
-import { Send, MessageCircle, X } from "lucide-react"
+import { Send, MessageCircle, X, Plus, Trash2, Bot } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 
 interface Message {
@@ -23,6 +34,13 @@ interface Message {
   isAutoMessage?: boolean
 }
 
+interface AutoMessage {
+  id: string
+  text: string
+  createdBy: string
+  timestamp: any
+}
+
 interface ChatProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -31,18 +49,22 @@ interface ChatProps {
 export default function Chat({ open, onOpenChange }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState("")
-  const [autoMessages, setAutoMessages] = useState<string[]>([])
+  const [autoMessages, setAutoMessages] = useState<AutoMessage[]>([])
   const [newAutoMessage, setNewAutoMessage] = useState("")
+  const [activeTab, setActiveTab] = useState("chat")
   const { userProfile } = useAuth()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Auto messages for admin to set
+  // Default auto messages
   const defaultAutoMessages = [
-    "Welcome to SocialApp! 🎉",
-    "Don't forget to check out our latest features!",
-    "Need help? Feel free to ask!",
-    "Thanks for being part of our community! ❤️",
-    "New updates are coming soon! Stay tuned! 🚀",
+    "Welcome to SocialApp! 🎉 Thanks for joining our community!",
+    "Don't forget to check out our latest features and updates! 🚀",
+    "Need help? Feel free to ask questions anytime! 💬",
+    "Thanks for being part of our amazing community! ❤️",
+    "New updates are coming soon! Stay tuned! ⭐",
+    "Remember to follow community guidelines for a better experience! 📋",
+    "Share your thoughts and connect with other users! 🤝",
+    "Enjoy exploring and creating amazing content! 🎨",
   ]
 
   useEffect(() => {
@@ -70,15 +92,35 @@ export default function Chat({ open, onOpenChange }: ChatProps) {
 
   const loadAutoMessages = async () => {
     try {
-      const q = query(collection(db, "autoMessages"))
+      const q = query(collection(db, "autoMessages"), orderBy("timestamp", "desc"))
       const snapshot = await getDocs(q)
-      const messages: string[] = []
+      const messages: AutoMessage[] = []
       snapshot.forEach((doc) => {
-        messages.push(doc.data().text)
+        messages.push({ id: doc.id, ...doc.data() } as AutoMessage)
       })
-      setAutoMessages(messages.length > 0 ? messages : defaultAutoMessages)
+      setAutoMessages(messages)
+
+      // If no auto messages exist, create default ones
+      if (messages.length === 0 && userProfile?.role === "admin") {
+        await createDefaultAutoMessages()
+      }
     } catch (error) {
-      setAutoMessages(defaultAutoMessages)
+      console.error("Error loading auto messages:", error)
+    }
+  }
+
+  const createDefaultAutoMessages = async () => {
+    try {
+      for (const message of defaultAutoMessages) {
+        await addDoc(collection(db, "autoMessages"), {
+          text: message,
+          createdBy: userProfile?.uid,
+          timestamp: serverTimestamp(),
+        })
+      }
+      loadAutoMessages()
+    } catch (error) {
+      console.error("Error creating default auto messages:", error)
     }
   }
 
@@ -126,10 +168,21 @@ export default function Chat({ open, onOpenChange }: ChatProps) {
         createdBy: userProfile.uid,
         timestamp: serverTimestamp(),
       })
-      setAutoMessages([...autoMessages, newAutoMessage])
       setNewAutoMessage("")
+      loadAutoMessages()
     } catch (error) {
       console.error("Error adding auto message:", error)
+    }
+  }
+
+  const deleteAutoMessage = async (messageId: string) => {
+    if (!userProfile || userProfile.role !== "admin") return
+
+    try {
+      await deleteDoc(doc(db, "autoMessages", messageId))
+      loadAutoMessages()
+    } catch (error) {
+      console.error("Error deleting auto message:", error)
     }
   }
 
@@ -137,7 +190,7 @@ export default function Chat({ open, onOpenChange }: ChatProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl h-[600px] flex flex-col">
+      <Card className="w-full max-w-4xl h-[700px] flex flex-col">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <div className="flex items-center space-x-2">
             <MessageCircle className="h-5 w-5" />
@@ -149,99 +202,224 @@ export default function Chat({ open, onOpenChange }: ChatProps) {
         </CardHeader>
 
         <CardContent className="flex-1 flex flex-col space-y-4">
-          {/* Admin Auto Messages Panel */}
-          {userProfile?.role === "admin" && (
-            <div className="border rounded-lg p-4 space-y-3">
-              <h4 className="font-semibold text-sm">Admin Quick Messages</h4>
-              <div className="flex flex-wrap gap-2">
-                {autoMessages.map((message, index) => (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => sendAutoMessage(message)}
-                    className="text-xs"
-                  >
-                    {message}
+          {userProfile?.role === "admin" ? (
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="chat">Chat</TabsTrigger>
+                <TabsTrigger value="admin">Admin Panel</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="chat" className="flex-1 flex flex-col space-y-4">
+                {/* Quick Auto Messages for Admin */}
+                <div className="border rounded-lg p-4 space-y-3 bg-muted/50">
+                  <h4 className="font-semibold text-sm flex items-center space-x-2">
+                    <Bot className="h-4 w-4" />
+                    <span>Quick Auto Messages</span>
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                    {autoMessages.slice(0, 8).map((message) => (
+                      <Button
+                        key={message.id}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => sendAutoMessage(message.text)}
+                        className="text-xs text-left justify-start h-auto p-2"
+                      >
+                        <span className="truncate">{message.text}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Messages */}
+                <ScrollArea className="flex-1 border rounded-lg p-4">
+                  <div className="space-y-4">
+                    {messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`flex items-start space-x-3 ${
+                          message.senderId === userProfile?.uid ? "flex-row-reverse space-x-reverse" : ""
+                        }`}
+                      >
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className={message.senderRole === "admin" ? "bg-red-100" : "bg-blue-100"}>
+                            {message.senderName.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className={`flex-1 ${message.senderId === userProfile?.uid ? "text-right" : ""}`}>
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="text-sm font-medium">{message.senderName}</span>
+                            <Badge
+                              variant={message.senderRole === "admin" ? "destructive" : "secondary"}
+                              className="text-xs"
+                            >
+                              {message.senderRole}
+                            </Badge>
+                            {message.isAutoMessage && (
+                              <Badge variant="outline" className="text-xs">
+                                Auto
+                              </Badge>
+                            )}
+                            {message.timestamp && (
+                              <span className="text-xs text-muted-foreground">
+                                {formatDistanceToNow(message.timestamp.toDate(), { addSuffix: true })}
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            className={`inline-block p-3 rounded-lg text-sm max-w-xs ${
+                              message.senderId === userProfile?.uid
+                                ? "bg-primary text-primary-foreground"
+                                : message.senderRole === "admin"
+                                  ? "bg-red-50 border border-red-200 dark:bg-red-900/20"
+                                  : "bg-muted"
+                            }`}
+                          >
+                            {message.text}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                  </div>
+                </ScrollArea>
+
+                {/* Message Input */}
+                <div className="flex space-x-2">
+                  <Input
+                    placeholder="Type your message..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                  />
+                  <Button onClick={sendMessage} disabled={!newMessage.trim()}>
+                    <Send className="h-4 w-4" />
                   </Button>
-                ))}
-              </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="admin" className="flex-1 flex flex-col space-y-4">
+                <div className="space-y-4">
+                  <h3 className="font-semibold">Manage Auto Messages</h3>
+
+                  {/* Add New Auto Message */}
+                  <div className="border rounded-lg p-4 space-y-3">
+                    <h4 className="font-medium">Add New Auto Message</h4>
+                    <div className="flex space-x-2">
+                      <Textarea
+                        placeholder="Enter new auto message..."
+                        value={newAutoMessage}
+                        onChange={(e) => setNewAutoMessage(e.target.value)}
+                        className="flex-1"
+                        rows={2}
+                      />
+                      <Button onClick={addAutoMessage} disabled={!newAutoMessage.trim()}>
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Auto Messages List */}
+                  <div className="border rounded-lg p-4">
+                    <h4 className="font-medium mb-3">Current Auto Messages ({autoMessages.length})</h4>
+                    <ScrollArea className="max-h-96">
+                      <div className="space-y-2">
+                        {autoMessages.map((message) => (
+                          <div key={message.id} className="flex items-start justify-between p-3 border rounded-lg">
+                            <div className="flex-1">
+                              <p className="text-sm">{message.text}</p>
+                              {message.timestamp && (
+                                <span className="text-xs text-muted-foreground">
+                                  Added {formatDistanceToNow(message.timestamp.toDate(), { addSuffix: true })}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex space-x-2 ml-2">
+                              <Button variant="outline" size="sm" onClick={() => sendAutoMessage(message.text)}>
+                                Send
+                              </Button>
+                              <Button variant="destructive" size="sm" onClick={() => deleteAutoMessage(message.id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          ) : (
+            // Regular user view
+            <div className="flex-1 flex flex-col space-y-4">
+              {/* Messages */}
+              <ScrollArea className="flex-1 border rounded-lg p-4">
+                <div className="space-y-4">
+                  {messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex items-start space-x-3 ${
+                        message.senderId === userProfile?.uid ? "flex-row-reverse space-x-reverse" : ""
+                      }`}
+                    >
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className={message.senderRole === "admin" ? "bg-red-100" : "bg-blue-100"}>
+                          {message.senderName.charAt(0)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className={`flex-1 ${message.senderId === userProfile?.uid ? "text-right" : ""}`}>
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="text-sm font-medium">{message.senderName}</span>
+                          <Badge
+                            variant={message.senderRole === "admin" ? "destructive" : "secondary"}
+                            className="text-xs"
+                          >
+                            {message.senderRole}
+                          </Badge>
+                          {message.isAutoMessage && (
+                            <Badge variant="outline" className="text-xs">
+                              Auto
+                            </Badge>
+                          )}
+                          {message.timestamp && (
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(message.timestamp.toDate(), { addSuffix: true })}
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          className={`inline-block p-3 rounded-lg text-sm max-w-xs ${
+                            message.senderId === userProfile?.uid
+                              ? "bg-primary text-primary-foreground"
+                              : message.senderRole === "admin"
+                                ? "bg-red-50 border border-red-200 dark:bg-red-900/20"
+                                : "bg-muted"
+                          }`}
+                        >
+                          {message.text}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
+              </ScrollArea>
+
+              {/* Message Input */}
               <div className="flex space-x-2">
                 <Input
-                  placeholder="Add new auto message..."
-                  value={newAutoMessage}
-                  onChange={(e) => setNewAutoMessage(e.target.value)}
-                  className="text-sm"
+                  placeholder="Type your message..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === "Enter" && sendMessage()}
                 />
-                <Button size="sm" onClick={addAutoMessage}>
-                  Add
+                <Button onClick={sendMessage} disabled={!newMessage.trim()}>
+                  <Send className="h-4 w-4" />
                 </Button>
               </div>
             </div>
           )}
-
-          {/* Messages */}
-          <ScrollArea className="flex-1 border rounded-lg p-4">
-            <div className="space-y-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex items-start space-x-3 ${
-                    message.senderId === userProfile?.uid ? "flex-row-reverse space-x-reverse" : ""
-                  }`}
-                >
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className={message.senderRole === "admin" ? "bg-red-100" : "bg-blue-100"}>
-                      {message.senderName.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className={`flex-1 ${message.senderId === userProfile?.uid ? "text-right" : ""}`}>
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className="text-sm font-medium">{message.senderName}</span>
-                      <Badge variant={message.senderRole === "admin" ? "destructive" : "secondary"} className="text-xs">
-                        {message.senderRole}
-                      </Badge>
-                      {message.isAutoMessage && (
-                        <Badge variant="outline" className="text-xs">
-                          Auto
-                        </Badge>
-                      )}
-                      {message.timestamp && (
-                        <span className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(message.timestamp.toDate(), { addSuffix: true })}
-                        </span>
-                      )}
-                    </div>
-                    <div
-                      className={`inline-block p-3 rounded-lg text-sm ${
-                        message.senderId === userProfile?.uid
-                          ? "bg-primary text-primary-foreground"
-                          : message.senderRole === "admin"
-                            ? "bg-red-50 border border-red-200"
-                            : "bg-muted"
-                      }`}
-                    >
-                      {message.text}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-          </ScrollArea>
-
-          {/* Message Input */}
-          <div className="flex space-x-2">
-            <Input
-              placeholder="Type your message..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-            />
-            <Button onClick={sendMessage} disabled={!newMessage.trim()}>
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
         </CardContent>
       </Card>
     </div>

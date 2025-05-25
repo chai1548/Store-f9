@@ -8,7 +8,7 @@ import { ModeToggle } from "@/components/mode-toggle"
 import { useAuth } from "@/contexts/auth-context"
 import AuthModal from "@/components/auth-modal"
 import Chat from "@/components/chat"
-import { Home, Upload, Search, User, Bell, MessageCircle, LogOut } from "lucide-react"
+import { Home, Upload, Search, User, Bell, MessageCircle, LogOut, Settings } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 
@@ -24,6 +24,7 @@ export default function Navigation() {
     { href: "/search", icon: Search, label: "Search" },
     { href: "/profile", icon: User, label: "Profile" },
     { href: "/notifications", icon: Bell, label: "Notifications" },
+    ...(userProfile?.role === "admin" ? [{ href: "/admin", icon: Settings, label: "Admin" }] : []),
   ]
 
   return (

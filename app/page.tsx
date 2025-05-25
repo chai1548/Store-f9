@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/auth-context"
 import Post from "@/components/post"
+import FirebaseStatus from "@/components/firebase-status"
 import { Search, Filter, Lock, Plus } from "lucide-react"
 import { collection, query, orderBy, onSnapshot, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { addSampleData } from "@/lib/firebase-utils"
 import Link from "next/link"
 
 export default function HomePage() {
@@ -23,12 +25,15 @@ export default function HomePage() {
       return
     }
 
+    console.log("Setting up posts listener...")
+
     // Listen to posts from Firebase Firestore
     const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(20))
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
+        console.log("Posts snapshot received:", snapshot.size, "documents")
         const newPosts: any[] = []
         snapshot.forEach((doc) => {
           const data = doc.data()
@@ -50,6 +55,15 @@ export default function HomePage() {
     return () => unsubscribe()
   }, [user])
 
+  const handleAddSampleData = async () => {
+    try {
+      await addSampleData()
+      console.log("Sample data added successfully")
+    } catch (error) {
+      console.error("Error adding sample data:", error)
+    }
+  }
+
   const filteredPosts = posts.filter(
     (post) =>
       post.content?.text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -58,19 +72,28 @@ export default function HomePage() {
 
   if (!user) {
     return (
-      <div className="max-w-4xl mx-auto text-center py-12">
-        <Lock className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-        <h1 className="text-3xl font-bold mb-4">Welcome to SocialApp</h1>
-        <p className="text-muted-foreground mb-6">Please login to access the social media platform</p>
-        <p className="text-sm text-muted-foreground">
-          Demo accounts: admin@socialapp.com / admin123 or user@socialapp.com / user123
-        </p>
+      <div className="max-w-4xl mx-auto">
+        <FirebaseStatus />
+        <div className="text-center py-12">
+          <Lock className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+          <h1 className="text-3xl font-bold mb-4">Welcome to SocialApp</h1>
+          <p className="text-muted-foreground mb-6">Please login to access the social media platform</p>
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              <strong>Demo Accounts:</strong>
+            </p>
+            <p>Admin: admin@socialapp.com / admin123</p>
+            <p>User: user@socialapp.com / user123</p>
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="max-w-4xl mx-auto">
+      <FirebaseStatus />
+
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-4">
@@ -138,9 +161,17 @@ export default function HomePage() {
                   : "No posts yet. Be the first to share something!"}
               </p>
               {!searchQuery && (
-                <Button asChild>
-                  <Link href="/upload">Create Your First Post</Link>
-                </Button>
+                <div className="space-y-4">
+                  <Button asChild>
+                    <Link href="/upload">Create Your First Post</Link>
+                  </Button>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Or add some sample data:</p>
+                    <Button variant="outline" onClick={handleAddSampleData}>
+                      Add Sample Posts
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

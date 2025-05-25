@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { createContext, useContext, useEffect, useState } from "react"
 import {
   type User,
@@ -20,6 +19,7 @@ interface UserProfile {
   role: "admin" | "user"
   avatar?: string
   createdAt: Date
+  isDemo?: boolean
 }
 
 interface AuthContextType {
@@ -42,10 +42,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUser(user)
-        // Get user profile from Firestore
-        const userDoc = await getDoc(doc(db, "users", user.uid))
-        if (userDoc.exists()) {
-          setUserProfile(userDoc.data() as UserProfile)
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.uid))
+          if (userDoc.exists()) {
+            setUserProfile(userDoc.data() as UserProfile)
+          } else {
+            const basicProfile: UserProfile = {
+              uid: user.uid,
+              email: user.email!,
+              displayName: user.displayName || user.email!.split("@")[0],
+              role: user.email === "admin@socialapp.com" ? "admin" : "user",
+              createdAt: new Date(),
+            }
+            await setDoc(doc(db, "users", user.uid), basicProfile)
+            setUserProfile(basicProfile)
+          }
+        } catch (error) {
+          console.error("Error loading user profile:", error)
         }
       } else {
         setUser(null)
@@ -58,18 +71,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const login = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password)
+    const result = await signInWithEmailAndPassword(auth, email, password)
+    return result
   }
 
   const register = async (email: string, password: string, displayName: string) => {
     const { user } = await createUserWithEmailAndPassword(auth, email, password)
 
-    // Create user profile in Firestore
     const userProfile: UserProfile = {
       uid: user.uid,
       email: user.email!,
       displayName,
-      role: email === "admin@socialapp.com" ? "admin" : "user", // Admin check
+      role: email === "admin@socialapp.com" ? "admin" : "user",
       createdAt: new Date(),
     }
 

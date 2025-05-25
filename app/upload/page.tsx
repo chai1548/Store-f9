@@ -18,6 +18,7 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { db, storage } from "@/lib/firebase"
 import { useRouter } from "next/navigation"
+import VideoThumbnailGenerator from "@/components/video-thumbnail-generator"
 
 export default function UploadPage() {
   const [activeTab, setActiveTab] = useState("text")
@@ -34,6 +35,7 @@ export default function UploadPage() {
   const { toast } = useToast()
   const { userProfile } = useAuth()
   const router = useRouter()
+  const [videoThumbnail, setVideoThumbnail] = useState<{ blob: Blob; url: string } | null>(null)
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
@@ -44,13 +46,24 @@ export default function UploadPage() {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const uploadFilesToStorage = async (files: File[]): Promise<string[]> => {
+  const uploadFilesToStorage = async (files: File[]): Promise<{ fileUrls: string[]; thumbnailUrl?: string }> => {
     const uploadPromises = files.map(async (file) => {
       const fileRef = ref(storage, `posts/${Date.now()}_${file.name}`)
       await uploadBytes(fileRef, file)
       return getDownloadURL(fileRef)
     })
-    return Promise.all(uploadPromises)
+
+    const fileUrls = await Promise.all(uploadPromises)
+
+    // Upload thumbnail if exists
+    let thumbnailUrl: string | undefined
+    if (videoThumbnail && activeTab === "video") {
+      const thumbnailRef = ref(storage, `thumbnails/${Date.now()}_thumbnail.jpg`)
+      await uploadBytes(thumbnailRef, videoThumbnail.blob)
+      thumbnailUrl = await getDownloadURL(thumbnailRef)
+    }
+
+    return { fileUrls, thumbnailUrl }
   }
 
   const handleUpload = async () => {
@@ -76,15 +89,17 @@ export default function UploadPage() {
     setUploadProgress(0)
 
     try {
-      // Upload files to Firebase Storage
       let fileUrls: string[] = []
+      let thumbnailUrl: string | undefined
+
       if (selectedFiles.length > 0) {
         setUploadProgress(30)
-        fileUrls = await uploadFilesToStorage(selectedFiles)
+        const result = await uploadFilesToStorage(selectedFiles)
+        fileUrls = result.fileUrls
+        thumbnailUrl = result.thumbnailUrl
         setUploadProgress(60)
       }
 
-      // Prepare post data
       const postData = {
         author: {
           uid: userProfile.uid,
@@ -96,6 +111,7 @@ export default function UploadPage() {
           text: content.trim() || null,
           images: activeTab === "image" ? fileUrls : [],
           video: activeTab === "video" && fileUrls.length > 0 ? fileUrls[0] : null,
+          videoThumbnail: thumbnailUrl || null,
         },
         type: activeTab,
         createdAt: serverTimestamp(),
@@ -282,6 +298,15 @@ export default function UploadPage() {
                       </label>
                     </div>
                   </div>
+
+                  {selectedFiles.length > 0 && selectedFiles[0].type.startsWith("video/") && (
+                    <VideoThumbnailGenerator
+                      videoFile={selectedFiles[0]}
+                      onThumbnailGenerated={(blob, url) => {
+                        setVideoThumbnail({ blob, url })
+                      }}
+                    />
+                  )}
 
                   {selectedFiles.length > 0 && (
                     <div className="space-y-2">
