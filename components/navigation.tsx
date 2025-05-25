@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { ModeToggle } from "@/components/mode-toggle"
 import { useAuth } from "@/contexts/auth-context"
 import AuthModal from "@/components/auth-modal"
-import Chat from "@/components/chat"
+import EnhancedChatSystem from "@/components/enhanced-chat-system"
 import { Home, Upload, Search, User, Bell, MessageCircle, LogOut, Settings, Menu } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -146,7 +146,7 @@ export default function Navigation() {
                           className="justify-start"
                         >
                           <MessageCircle className="h-4 w-4 mr-2" />
-                          Chat
+                          Enhanced Chat
                         </Button>
 
                         {/* Logout */}
@@ -208,7 +208,7 @@ export default function Navigation() {
       </nav>
 
       <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
-      <Chat open={showChat} onOpenChange={setShowChat} />
+      <EnhancedChatSystem open={showChat} onOpenChange={setShowChat} />
     </>
   )
 }

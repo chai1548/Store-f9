@@ -53,16 +53,16 @@ interface Post {
   }
   type: "text" | "image" | "video"
   timestamp: Date
-  likes: number
-  comments: number
-  shares: number
+  likes?: number
+  comments?: number
+  shares?: number
   views?: number
   isLiked?: boolean
   isBookmarked?: boolean
   settings?: {
-    allowComments: boolean
-    allowSharing: boolean
-    allowDownload: boolean
+    allowComments?: boolean
+    allowSharing?: boolean
+    allowDownload?: boolean
   }
 }
 
@@ -72,9 +72,40 @@ interface PostProps {
 }
 
 export default function Post({ post, compact = false }: PostProps) {
-  const [isLiked, setIsLiked] = useState(post.isLiked || false)
-  const [isBookmarked, setIsBookmarked] = useState(post.isBookmarked || false)
-  const [likes, setLikes] = useState(post.likes || 0)
+  // Provide safe defaults for all post properties
+  const safePost = {
+    ...post,
+    likes: post.likes ?? 0,
+    comments: post.comments ?? 0,
+    shares: post.shares ?? 0,
+    views: post.views ?? 0,
+    isLiked: post.isLiked ?? false,
+    isBookmarked: post.isBookmarked ?? false,
+    settings: {
+      allowComments: post.settings?.allowComments ?? true,
+      allowSharing: post.settings?.allowSharing ?? true,
+      allowDownload: post.settings?.allowDownload ?? true,
+      ...post.settings,
+    },
+    author: {
+      uid: post.author?.uid ?? "",
+      name: post.author?.name ?? "Unknown User",
+      username: post.author?.username ?? "unknown",
+      avatar: post.author?.avatar,
+      ...post.author,
+    },
+    content: {
+      text: post.content?.text,
+      images: post.content?.images ?? [],
+      video: post.content?.video,
+      videoThumbnail: post.content?.videoThumbnail,
+      ...post.content,
+    },
+  }
+
+  const [isLiked, setIsLiked] = useState(safePost.isLiked)
+  const [isBookmarked, setIsBookmarked] = useState(safePost.isBookmarked)
+  const [likes, setLikes] = useState(safePost.likes)
   const [showComments, setShowComments] = useState(false)
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState("")
@@ -83,13 +114,15 @@ export default function Post({ post, compact = false }: PostProps) {
   const { toast } = useToast()
 
   useEffect(() => {
-    if (showComments) {
+    if (showComments && post?.id) {
       const unsubscribe = loadComments()
       return () => unsubscribe()
     }
-  }, [showComments, post.id])
+  }, [showComments, post?.id])
 
   const loadComments = () => {
+    if (!post?.id) return () => {}
+
     setCommentsLoading(true)
     const q = query(collection(db, "posts", post.id, "comments"), orderBy("createdAt", "asc"))
 
@@ -106,7 +139,7 @@ export default function Post({ post, compact = false }: PostProps) {
   }
 
   const handleLike = async () => {
-    if (!userProfile) return
+    if (!userProfile || !post?.id) return
 
     try {
       const newLikedState = !isLiked
@@ -125,7 +158,7 @@ export default function Post({ post, compact = false }: PostProps) {
   }
 
   const handleAddComment = async () => {
-    if (!newComment.trim() || !userProfile) return
+    if (!newComment.trim() || !userProfile || !post?.id) return
 
     try {
       await addDoc(collection(db, "posts", post.id, "comments"), {
@@ -156,7 +189,7 @@ export default function Post({ post, compact = false }: PostProps) {
   }
 
   const handleShare = async () => {
-    if (!post.settings?.allowSharing) return
+    if (!safePost.settings.allowSharing || !post?.id) return
 
     try {
       const postRef = doc(db, "posts", post.id)
@@ -177,6 +210,8 @@ export default function Post({ post, compact = false }: PostProps) {
   }
 
   const handleDelete = async () => {
+    if (!post?.id) return
+
     try {
       await deleteDoc(doc(db, "posts", post.id))
       toast({
@@ -194,9 +229,9 @@ export default function Post({ post, compact = false }: PostProps) {
   }
 
   const renderImages = () => {
-    if (!post.content.images || post.content.images.length === 0) return null
+    if (!safePost.content.images || safePost.content.images.length === 0) return null
 
-    const images = post.content.images
+    const images = safePost.content.images
     const imageCount = images.length
 
     if (imageCount === 1) {
@@ -270,58 +305,69 @@ export default function Post({ post, compact = false }: PostProps) {
     )
   }
 
+  // Early return if post is invalid
+  if (!post || !post.id) {
+    return (
+      <Card className="w-full max-w-2xl mx-auto mb-4 sm:mb-6">
+        <CardContent className="p-6 text-center">
+          <p className="text-muted-foreground">Post not found or invalid</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card className={`w-full ${compact ? "max-w-lg" : "max-w-2xl"} mx-auto mb-4 sm:mb-6`}>
       <CardHeader className={`flex flex-row items-center space-y-0 ${compact ? "pb-2" : "pb-3"}`}>
         <div className="flex items-center space-x-3 flex-1">
           <Avatar className={compact ? "h-8 w-8" : "h-10 w-10"}>
-            <AvatarImage src={post.author.avatar || "/placeholder.svg"} />
+            <AvatarImage src={safePost.author.avatar || "/placeholder.svg"} />
             <AvatarFallback className={compact ? "text-xs" : "text-sm"}>
-              {post.author.name?.charAt(0) || "U"}
+              {safePost.author.name?.charAt(0) || "U"}
             </AvatarFallback>
           </Avatar>
           <div>
-            <p className={`font-semibold ${compact ? "text-sm" : "text-base"}`}>{post.author.name}</p>
-            <p className={`text-muted-foreground ${compact ? "text-xs" : "text-sm"}`}>@{post.author.username}</p>
+            <p className={`font-semibold ${compact ? "text-sm" : "text-base"}`}>{safePost.author.name}</p>
+            <p className={`text-muted-foreground ${compact ? "text-xs" : "text-sm"}`}>@{safePost.author.username}</p>
           </div>
         </div>
         <div className="flex items-center space-x-2">
           <Badge variant="secondary" className={compact ? "text-xs px-2 py-0.5" : ""}>
-            {post.type}
+            {safePost.type}
           </Badge>
           <span className={`text-muted-foreground ${compact ? "text-xs" : "text-sm"} hidden sm:inline`}>
-            {formatDistanceToNow(post.timestamp, { addSuffix: true })}
+            {formatDistanceToNow(safePost.timestamp, { addSuffix: true })}
           </span>
         </div>
       </CardHeader>
 
       <CardContent className={compact ? "pb-2" : "pb-3"}>
-        {post.content.text && (
+        {safePost.content.text && (
           <p className={`mb-4 leading-relaxed ${compact ? "text-sm" : "text-base"}`}>
-            {post.content.text.length > (compact ? 100 : 200) ? (
+            {safePost.content.text.length > (compact ? 100 : 200) ? (
               <>
-                {post.content.text.slice(0, compact ? 100 : 200)}...
+                {safePost.content.text.slice(0, compact ? 100 : 200)}...
                 <Link href={`/post/${post.id}`} className="text-primary hover:underline ml-1">
                   Read more
                 </Link>
               </>
             ) : (
-              post.content.text
+              safePost.content.text
             )}
           </p>
         )}
 
         {renderImages()}
 
-        {post.content.video && (
+        {safePost.content.video && (
           <div className="mb-4 relative group">
             <video
               controls
               className="w-full rounded-lg"
-              poster={post.content.videoThumbnail || "/placeholder.svg?height=300&width=500"}
+              poster={safePost.content.videoThumbnail || "/placeholder.svg?height=300&width=500"}
               preload="metadata"
             >
-              <source src={post.content.video} type="video/mp4" />
+              <source src={safePost.content.video} type="video/mp4" />
               Your browser does not support the video tag.
             </video>
             <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs">Video</div>
@@ -340,7 +386,7 @@ export default function Post({ post, compact = false }: PostProps) {
         )}
 
         {/* View Post Link - Only show on mobile or compact view */}
-        {(compact || window.innerWidth < 640) && (
+        {compact && (
           <div className="flex items-center justify-end text-sm text-muted-foreground mb-2">
             <Button variant="ghost" size="sm" asChild>
               <Link href={`/post/${post.id}`} className="flex items-center space-x-1">
@@ -354,7 +400,7 @@ export default function Post({ post, compact = false }: PostProps) {
 
       <CardFooter className="flex flex-col space-y-4 pt-3 border-t">
         <PostActions
-          post={post}
+          post={safePost}
           isLiked={isLiked}
           isBookmarked={isBookmarked}
           likes={likes}
@@ -369,7 +415,7 @@ export default function Post({ post, compact = false }: PostProps) {
         />
 
         {/* Quick Comments Preview */}
-        {showComments && post.settings?.allowComments !== false && (
+        {showComments && safePost.settings.allowComments && (
           <div className="w-full space-y-4">
             <Separator />
 

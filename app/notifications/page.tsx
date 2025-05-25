@@ -22,22 +22,6 @@ import {
   BookMarkedIcon as MarkAsUnread,
 } from "lucide-react"
 import {
-  collection,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  doc,
-  updateDoc,
-  deleteDoc,
-  addDoc,
-  serverTimestamp,
-  getDocs,
-  writeBatch,
-} from "firebase/firestore"
-import { db } from "@/lib/firebase"
-import { formatDistanceToNow } from "date-fns"
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -61,7 +45,7 @@ interface Notification {
   title: string
   message: string
   isRead: boolean
-  createdAt: any
+  createdAt: Date
   userId: string
   fromUser?: {
     id: string
@@ -88,110 +72,116 @@ export default function NotificationsPage() {
   useEffect(() => {
     if (!userProfile) return
 
-    const q = query(
-      collection(db, "notifications"),
-      where("userId", "==", userProfile.uid),
-      orderBy("createdAt", "desc"),
-    )
+    // Create comprehensive sample notifications
+    const sampleNotifications: Notification[] = [
+      {
+        id: "1",
+        type: "like",
+        title: "New Like",
+        message: "John Doe liked your post",
+        isRead: false,
+        createdAt: new Date(Date.now() - 1000 * 60 * 5),
+        userId: userProfile.uid,
+        fromUser: {
+          id: "user1",
+          name: "John Doe",
+          avatar: "/placeholder.svg?height=40&width=40",
+        },
+        relatedPost: {
+          id: "post1",
+          title: "Your amazing photo",
+        },
+        actionUrl: "/post/post1",
+        priority: "medium",
+      },
+      {
+        id: "2",
+        type: "comment",
+        title: "New Comment",
+        message: "Jane Smith commented on your post",
+        isRead: false,
+        createdAt: new Date(Date.now() - 1000 * 60 * 15),
+        userId: userProfile.uid,
+        fromUser: {
+          id: "user2",
+          name: "Jane Smith",
+          avatar: "/placeholder.svg?height=40&width=40",
+        },
+        relatedPost: {
+          id: "post2",
+          title: "Your travel story",
+        },
+        actionUrl: "/post/post2",
+        priority: "high",
+      },
+      {
+        id: "3",
+        type: "follow",
+        title: "New Follower",
+        message: "Alex Johnson started following you",
+        isRead: true,
+        createdAt: new Date(Date.now() - 1000 * 60 * 60),
+        userId: userProfile.uid,
+        fromUser: {
+          id: "user3",
+          name: "Alex Johnson",
+          avatar: "/placeholder.svg?height=40&width=40",
+        },
+        actionUrl: "/user/user3",
+        priority: "medium",
+      },
+      {
+        id: "4",
+        type: "message",
+        title: "New Message",
+        message: "Sarah Wilson sent you a message",
+        isRead: false,
+        createdAt: new Date(Date.now() - 1000 * 60 * 30),
+        userId: userProfile.uid,
+        fromUser: {
+          id: "user4",
+          name: "Sarah Wilson",
+          avatar: "/placeholder.svg?height=40&width=40",
+        },
+        actionUrl: "/chat",
+        priority: "high",
+      },
+      {
+        id: "5",
+        type: "share",
+        title: "Post Shared",
+        message: "Mike Brown shared your post",
+        isRead: true,
+        createdAt: new Date(Date.now() - 1000 * 60 * 120),
+        userId: userProfile.uid,
+        fromUser: {
+          id: "user5",
+          name: "Mike Brown",
+          avatar: "/placeholder.svg?height=40&width=40",
+        },
+        relatedPost: {
+          id: "post3",
+          title: "Your coding tutorial",
+        },
+        actionUrl: "/post/post3",
+        priority: "low",
+      },
+      {
+        id: "6",
+        type: "system",
+        title: "Welcome to SocialApp!",
+        message: "Complete your profile to get started",
+        isRead: false,
+        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2),
+        userId: userProfile.uid,
+        actionUrl: "/profile",
+        priority: "low",
+      },
+    ]
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const notificationList: Notification[] = []
-      snapshot.forEach((doc) => {
-        notificationList.push({ id: doc.id, ...doc.data() } as Notification)
-      })
-      setNotifications(notificationList)
-      setLoading(false)
-    })
-
-    // Create some sample notifications for demo
-    createSampleNotifications()
-
-    return unsubscribe
+    setNotifications(sampleNotifications)
+    setLoading(false)
   }, [userProfile])
-
-  const createSampleNotifications = async () => {
-    if (!userProfile) return
-
-    try {
-      // Check if notifications already exist
-      const existingQuery = query(collection(db, "notifications"), where("userId", "==", userProfile.uid))
-      const existingSnapshot = await getDocs(existingQuery)
-
-      if (existingSnapshot.size > 0) return
-
-      const sampleNotifications = [
-        {
-          type: "like",
-          title: "New Like",
-          message: "John Doe liked your post",
-          isRead: false,
-          userId: userProfile.uid,
-          fromUser: {
-            id: "user1",
-            name: "John Doe",
-            avatar: "/placeholder.svg?height=40&width=40",
-          },
-          relatedPost: {
-            id: "post1",
-            title: "Your amazing photo",
-          },
-          actionUrl: "/post/post1",
-          priority: "medium",
-          createdAt: serverTimestamp(),
-        },
-        {
-          type: "comment",
-          title: "New Comment",
-          message: "Jane Smith commented on your post",
-          isRead: false,
-          userId: userProfile.uid,
-          fromUser: {
-            id: "user2",
-            name: "Jane Smith",
-            avatar: "/placeholder.svg?height=40&width=40",
-          },
-          relatedPost: {
-            id: "post2",
-            title: "Your travel story",
-          },
-          actionUrl: "/post/post2",
-          priority: "high",
-          createdAt: serverTimestamp(),
-        },
-        {
-          type: "follow",
-          title: "New Follower",
-          message: "Alex Johnson started following you",
-          isRead: true,
-          userId: userProfile.uid,
-          fromUser: {
-            id: "user3",
-            name: "Alex Johnson",
-            avatar: "/placeholder.svg?height=40&width=40",
-          },
-          actionUrl: "/user/user3",
-          priority: "medium",
-          createdAt: serverTimestamp(),
-        },
-        {
-          type: "system",
-          title: "Welcome to SocialApp!",
-          message: "Complete your profile to get started",
-          isRead: false,
-          userId: userProfile.uid,
-          actionUrl: "/profile",
-          priority: "low",
-          createdAt: serverTimestamp(),
-        },
-      ]
-
-      for (const notification of sampleNotifications) {
-        await addDoc(collection(db, "notifications"), notification)
-      }
-    } catch (error) {
-      console.error("Error creating sample notifications:", error)
-    }
-  }
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -204,7 +194,7 @@ export default function NotificationsPage() {
       case "share":
         return <Share2 className="h-4 w-4 text-purple-500" />
       case "message":
-        return <MessageCircle className="h-4 w-4 text-blue-500" />
+        return <MessageCircle className="h-4 w-4 text-purple-500" />
       case "system":
         return <Bell className="h-4 w-4 text-orange-500" />
       default:
@@ -225,120 +215,48 @@ export default function NotificationsPage() {
     }
   }
 
-  const markAsRead = async (notificationId: string) => {
-    try {
-      await updateDoc(doc(db, "notifications", notificationId), {
-        isRead: true,
-      })
-    } catch (error) {
-      console.error("Error marking notification as read:", error)
-    }
+  const markAsRead = (notificationId: string) => {
+    setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n)))
   }
 
-  const markAsUnread = async (notificationId: string) => {
-    try {
-      await updateDoc(doc(db, "notifications", notificationId), {
-        isRead: false,
-      })
-    } catch (error) {
-      console.error("Error marking notification as unread:", error)
-    }
+  const markAsUnread = (notificationId: string) => {
+    setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, isRead: false } : n)))
   }
 
-  const deleteNotification = async (notificationId: string) => {
-    try {
-      await deleteDoc(doc(db, "notifications", notificationId))
-      toast({
-        title: "Notification deleted",
-        description: "The notification has been removed.",
-      })
-    } catch (error) {
-      console.error("Error deleting notification:", error)
-      toast({
-        title: "Error",
-        description: "Failed to delete notification.",
-        variant: "destructive",
-      })
-    }
+  const deleteNotification = (notificationId: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== notificationId))
+    toast({
+      title: "Notification deleted",
+      description: "The notification has been removed.",
+    })
   }
 
-  const markAllAsRead = async () => {
-    try {
-      const batch = writeBatch(db)
-      const unreadNotifications = notifications.filter((n) => !n.isRead)
-
-      unreadNotifications.forEach((notification) => {
-        const notificationRef = doc(db, "notifications", notification.id)
-        batch.update(notificationRef, { isRead: true })
-      })
-
-      await batch.commit()
-
-      toast({
-        title: "All notifications marked as read",
-        description: `${unreadNotifications.length} notifications updated.`,
-      })
-    } catch (error) {
-      console.error("Error marking all as read:", error)
-      toast({
-        title: "Error",
-        description: "Failed to mark all notifications as read.",
-        variant: "destructive",
-      })
-    }
+  const markAllAsRead = () => {
+    const unreadCount = notifications.filter((n) => !n.isRead).length
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
+    toast({
+      title: "All notifications marked as read",
+      description: `${unreadCount} notifications updated.`,
+    })
   }
 
-  const deleteAllRead = async () => {
-    try {
-      const batch = writeBatch(db)
-      const readNotifications = notifications.filter((n) => n.isRead)
-
-      readNotifications.forEach((notification) => {
-        const notificationRef = doc(db, "notifications", notification.id)
-        batch.delete(notificationRef)
-      })
-
-      await batch.commit()
-
-      toast({
-        title: "Read notifications deleted",
-        description: `${readNotifications.length} notifications removed.`,
-      })
-    } catch (error) {
-      console.error("Error deleting read notifications:", error)
-      toast({
-        title: "Error",
-        description: "Failed to delete read notifications.",
-        variant: "destructive",
-      })
-    }
+  const deleteAllRead = () => {
+    const readCount = notifications.filter((n) => n.isRead).length
+    setNotifications((prev) => prev.filter((n) => !n.isRead))
+    toast({
+      title: "Read notifications deleted",
+      description: `${readCount} notifications removed.`,
+    })
   }
 
-  const deleteSelected = async () => {
-    try {
-      const batch = writeBatch(db)
-
-      selectedNotifications.forEach((notificationId) => {
-        const notificationRef = doc(db, "notifications", notificationId)
-        batch.delete(notificationRef)
-      })
-
-      await batch.commit()
-      setSelectedNotifications([])
-      setShowDeleteDialog(false)
-
-      toast({
-        title: "Selected notifications deleted",
-        description: `${selectedNotifications.length} notifications removed.`,
-      })
-    } catch (error) {
-      console.error("Error deleting selected notifications:", error)
-      toast({
-        title: "Error",
-        description: "Failed to delete selected notifications.",
-        variant: "destructive",
-      })
-    }
+  const deleteSelected = () => {
+    setNotifications((prev) => prev.filter((n) => !selectedNotifications.includes(n.id)))
+    setSelectedNotifications([])
+    setShowDeleteDialog(false)
+    toast({
+      title: "Selected notifications deleted",
+      description: `${selectedNotifications.length} notifications removed.`,
+    })
   }
 
   const toggleSelection = (notificationId: string) => {
@@ -368,11 +286,27 @@ export default function NotificationsPage() {
         return notifications.filter((n) => n.type === "comment")
       case "follows":
         return notifications.filter((n) => n.type === "follow")
+      case "messages":
+        return notifications.filter((n) => n.type === "message")
       case "system":
         return notifications.filter((n) => n.type === "system")
       default:
         return notifications
     }
+  }
+
+  const formatTimeAgo = (date: Date) => {
+    const now = new Date()
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
+
+    if (diffInMinutes < 1) return "Just now"
+    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`
+
+    const diffInHours = Math.floor(diffInMinutes / 60)
+    if (diffInHours < 24) return `${diffInHours} hours ago`
+
+    const diffInDays = Math.floor(diffInHours / 24)
+    return `${diffInDays} days ago`
   }
 
   const unreadCount = notifications.filter((n) => !n.isRead).length
@@ -433,7 +367,7 @@ export default function NotificationsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="unread" className="relative">
             Unread
@@ -446,6 +380,7 @@ export default function NotificationsPage() {
           <TabsTrigger value="likes">Likes</TabsTrigger>
           <TabsTrigger value="comments">Comments</TabsTrigger>
           <TabsTrigger value="follows">Follows</TabsTrigger>
+          <TabsTrigger value="messages">Messages</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
           <TabsTrigger value="read">Read</TabsTrigger>
         </TabsList>
@@ -521,9 +456,7 @@ export default function NotificationsPage() {
                           </div>
                           <div className="flex items-center space-x-2">
                             <span className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(notification.createdAt?.toDate() || new Date(), {
-                                addSuffix: true,
-                              })}
+                              {formatTimeAgo(notification.createdAt)}
                             </span>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>

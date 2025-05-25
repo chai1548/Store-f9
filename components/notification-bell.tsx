@@ -14,9 +14,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/contexts/auth-context"
 import { Bell, Heart, MessageCircle, UserPlus, Settings } from "lucide-react"
-import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
-import { formatDistanceToNow } from "date-fns"
 import Link from "next/link"
 
 interface Notification {
@@ -25,7 +22,7 @@ interface Notification {
   title: string
   message: string
   isRead: boolean
-  createdAt: any
+  createdAt: Date
   fromUser?: {
     id: string
     name: string
@@ -43,28 +40,68 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!userProfile) return
 
-    const q = query(
-      collection(db, "notifications"),
-      where("userId", "==", userProfile.uid),
-      orderBy("createdAt", "desc"),
-      limit(10),
-    )
+    // Create sample notifications without Firebase
+    const sampleNotifications: Notification[] = [
+      {
+        id: "1",
+        type: "like",
+        title: "New Like",
+        message: "John Doe liked your post",
+        isRead: false,
+        createdAt: new Date(Date.now() - 1000 * 60 * 5), // 5 minutes ago
+        fromUser: {
+          id: "user1",
+          name: "John Doe",
+          avatar: "/placeholder.svg?height=40&width=40",
+        },
+        actionUrl: "/post/1",
+      },
+      {
+        id: "2",
+        type: "comment",
+        title: "New Comment",
+        message: "Jane Smith commented on your post",
+        isRead: false,
+        createdAt: new Date(Date.now() - 1000 * 60 * 15), // 15 minutes ago
+        fromUser: {
+          id: "user2",
+          name: "Jane Smith",
+          avatar: "/placeholder.svg?height=40&width=40",
+        },
+        actionUrl: "/post/2",
+      },
+      {
+        id: "3",
+        type: "follow",
+        title: "New Follower",
+        message: "Alex Johnson started following you",
+        isRead: true,
+        createdAt: new Date(Date.now() - 1000 * 60 * 60), // 1 hour ago
+        fromUser: {
+          id: "user3",
+          name: "Alex Johnson",
+          avatar: "/placeholder.svg?height=40&width=40",
+        },
+        actionUrl: "/user/user3",
+      },
+      {
+        id: "4",
+        type: "message",
+        title: "New Message",
+        message: "Sarah Wilson sent you a message",
+        isRead: false,
+        createdAt: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
+        fromUser: {
+          id: "user4",
+          name: "Sarah Wilson",
+          avatar: "/placeholder.svg?height=40&width=40",
+        },
+        actionUrl: "/chat",
+      },
+    ]
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const notificationList: Notification[] = []
-      let unread = 0
-
-      snapshot.forEach((doc) => {
-        const notification = { id: doc.id, ...doc.data() } as Notification
-        notificationList.push(notification)
-        if (!notification.isRead) unread++
-      })
-
-      setNotifications(notificationList)
-      setUnreadCount(unread)
-    })
-
-    return unsubscribe
+    setNotifications(sampleNotifications)
+    setUnreadCount(sampleNotifications.filter((n) => !n.isRead).length)
   }, [userProfile])
 
   const getNotificationIcon = (type: string) => {
@@ -75,19 +112,16 @@ export default function NotificationBell() {
         return <MessageCircle className="h-3 w-3 text-blue-500" />
       case "follow":
         return <UserPlus className="h-3 w-3 text-green-500" />
+      case "message":
+        return <MessageCircle className="h-3 w-3 text-purple-500" />
       default:
         return <Bell className="h-3 w-3" />
     }
   }
 
-  const markAsRead = async (notificationId: string) => {
-    try {
-      await updateDoc(doc(db, "notifications", notificationId), {
-        isRead: true,
-      })
-    } catch (error) {
-      console.error("Error marking notification as read:", error)
-    }
+  const markAsRead = (notificationId: string) => {
+    setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n)))
+    setUnreadCount((prev) => Math.max(0, prev - 1))
   }
 
   const handleNotificationClick = (notification: Notification) => {
@@ -98,6 +132,20 @@ export default function NotificationBell() {
     if (notification.actionUrl) {
       window.location.href = notification.actionUrl
     }
+  }
+
+  const formatTimeAgo = (date: Date) => {
+    const now = new Date()
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
+
+    if (diffInMinutes < 1) return "Just now"
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`
+
+    const diffInHours = Math.floor(diffInMinutes / 60)
+    if (diffInHours < 24) return `${diffInHours}h ago`
+
+    const diffInDays = Math.floor(diffInHours / 24)
+    return `${diffInDays}d ago`
   }
 
   if (!userProfile) return null
@@ -157,11 +205,7 @@ export default function NotificationBell() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground truncate">{notification.message}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDistanceToNow(notification.createdAt?.toDate() || new Date(), {
-                          addSuffix: true,
-                        })}
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">{formatTimeAgo(notification.createdAt)}</p>
                     </div>
                   </div>
                 </DropdownMenuItem>

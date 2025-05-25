@@ -135,28 +135,56 @@ export default function AuthModal({ open, onOpenChange }: AuthModalProps) {
           </Alert>
         )}
 
-        {/* Demo Accounts Section */}
-        <div className="border rounded-lg p-4 bg-muted/50">
+        {/* Enhanced Demo Accounts Section */}
+        <div className="border rounded-lg p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20">
           <div className="flex items-center space-x-2 mb-3">
-            <Users className="h-4 w-4" />
-            <h4 className="font-semibold text-sm">Quick Demo Login</h4>
+            <Users className="h-4 w-4 text-blue-600" />
+            <h4 className="font-semibold text-sm">🚀 Quick Demo Login</h4>
           </div>
-          <div className="grid grid-cols-1 gap-2">
-            {demoAccounts.map((account) => (
-              <Button
-                key={account.email}
-                variant="outline"
-                size="sm"
-                onClick={() => handleDemoLogin(account.email, account.password)}
-                disabled={loading}
-                className="justify-start"
-              >
-                <div className="text-left">
-                  <div className="font-medium">{account.displayName}</div>
-                  <div className="text-xs text-muted-foreground">{account.email}</div>
+          <p className="text-xs text-muted-foreground mb-3">Try the app instantly with pre-configured accounts</p>
+          <div className="grid grid-cols-1 gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleDemoLogin("admin@socialapp.com", "admin123")}
+              disabled={loading}
+              className="justify-start border-red-200 hover:border-red-300 hover:bg-red-50"
+            >
+              <div className="text-left w-full">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-red-700">👑 Admin User</div>
+                  <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">ADMIN</span>
                 </div>
-              </Button>
-            ))}
+                <div className="text-xs text-muted-foreground">admin@socialapp.com</div>
+                <div className="text-xs text-red-600 mt-1">✨ Full access • Chat moderation • User management</div>
+              </div>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleDemoLogin("user@socialapp.com", "user123")}
+              disabled={loading}
+              className="justify-start border-blue-200 hover:border-blue-300 hover:bg-blue-50"
+            >
+              <div className="text-left w-full">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-blue-700">👤 Demo User</div>
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">USER</span>
+                </div>
+                <div className="text-xs text-muted-foreground">user@socialapp.com</div>
+                <div className="text-xs text-blue-600 mt-1">
+                  📱 Standard access • Post content • Chat & notifications
+                </div>
+              </div>
+            </Button>
+          </div>
+
+          <div className="mt-3 p-2 bg-yellow-50 dark:bg-yellow-950/20 rounded border border-yellow-200">
+            <p className="text-xs text-yellow-700 dark:text-yellow-300">
+              💡 <strong>Tip:</strong> Login as Admin to access moderation tools, or as User to experience the standard
+              interface
+            </p>
           </div>
         </div>
 
